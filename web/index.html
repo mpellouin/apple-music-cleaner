@@ -1,0 +1,464 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Apple Music Cleaner</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🧹</text></svg>">
+<style>
+  :root {
+    --bg: #09090b;
+    --card: rgba(255,255,255,0.045);
+    --card-solid: #131316;
+    --border: rgba(255,255,255,0.09);
+    --border-strong: rgba(255,255,255,0.16);
+    --text: #f5f5f7;
+    --dim: #9b9ba3;
+    --red: #fa233b;
+    --red-2: #fb5c74;
+    --grad: linear-gradient(135deg, #fa233b, #fb5c74);
+    --green: #30d158;
+    --amber: #ffd60a;
+    --mono: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html { color-scheme: dark; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", Inter, Roboto, sans-serif;
+    line-height: 1.55;
+    min-height: 100vh;
+    -webkit-font-smoothing: antialiased;
+  }
+  body::before {
+    content: "";
+    position: fixed; inset: 0; z-index: -1;
+    background:
+      radial-gradient(600px 400px at 15% -5%, rgba(250,35,59,0.13), transparent 65%),
+      radial-gradient(700px 500px at 90% 0%, rgba(251,92,116,0.08), transparent 65%),
+      radial-gradient(800px 600px at 50% 110%, rgba(250,35,59,0.06), transparent 60%);
+  }
+  .shell { max-width: 680px; margin: 0 auto; padding: 3.5rem 1.25rem 4rem; }
+
+  .brand { display: flex; align-items: center; gap: 0.9rem; margin-bottom: 2.2rem; }
+  .brand-mark {
+    width: 46px; height: 46px; border-radius: 12px;
+    background: var(--grad);
+    display: grid; place-items: center;
+    font-size: 1.4rem;
+    box-shadow: 0 8px 24px rgba(250,35,59,0.35);
+  }
+  .brand h1 { font-size: 1.25rem; font-weight: 700; letter-spacing: -0.02em; }
+  .brand p { font-size: 0.86rem; color: var(--dim); margin-top: -2px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 1.6rem;
+    backdrop-filter: blur(20px);
+  }
+  .view { display: none; animation: rise 0.45s var(--ease); }
+  .view.active { display: block; }
+  @keyframes rise { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+
+  h2 { font-size: 1.15rem; font-weight: 700; letter-spacing: -0.01em; }
+  .sub { color: var(--dim); font-size: 0.9rem; margin-top: 0.15rem; }
+
+  label { display: block; font-size: 0.82rem; font-weight: 600; color: var(--dim); margin: 1.2rem 0 0.4rem; text-transform: uppercase; letter-spacing: 0.05em; }
+  textarea {
+    width: 100%;
+    background: rgba(0,0,0,0.35);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    color: var(--text);
+    font-family: var(--mono); font-size: 0.78rem;
+    padding: 0.75rem 0.9rem;
+    resize: vertical;
+    transition: border-color 0.2s, box-shadow 0.2s;
+  }
+  textarea:focus { outline: none; border-color: var(--red); box-shadow: 0 0 0 3px rgba(250,35,59,0.18); }
+  .hint { font-size: 0.8rem; margin-top: 0.35rem; min-height: 1.1em; color: var(--dim); }
+  .hint.ok { color: var(--green); }
+  .hint.bad { color: var(--red-2); }
+
+  .btn {
+    display: inline-flex; align-items: center; justify-content: center; gap: 0.5rem;
+    border: none; border-radius: 12px;
+    font: inherit; font-weight: 600; font-size: 0.95rem;
+    padding: 0.75rem 1.4rem;
+    cursor: pointer;
+    transition: transform 0.15s var(--ease), box-shadow 0.15s, opacity 0.15s;
+  }
+  .btn:disabled { opacity: 0.45; cursor: default; }
+  .btn-primary { background: var(--grad); color: #fff; box-shadow: 0 6px 20px rgba(250,35,59,0.3); width: 100%; margin-top: 1.4rem; padding: 0.9rem; }
+  .btn-primary:not(:disabled):hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(250,35,59,0.4); }
+  .btn-danger { background: rgba(250,35,59,0.12); color: var(--red-2); border: 1px solid rgba(250,35,59,0.4); width: 100%; }
+  .btn-danger:not(:disabled):hover { background: rgba(250,35,59,0.2); }
+  .btn-ghost { background: transparent; color: var(--dim); border: 1px solid var(--border); }
+  .btn-ghost:hover { color: var(--text); border-color: var(--border-strong); }
+
+  .spinner {
+    width: 16px; height: 16px; border-radius: 50%;
+    border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff;
+    animation: spin 0.7s linear infinite;
+    display: none;
+  }
+  .loading .spinner { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  details.help { margin-top: 1.3rem; border-top: 1px solid var(--border); padding-top: 1rem; }
+  details.help summary { cursor: pointer; color: var(--dim); font-size: 0.88rem; font-weight: 600; list-style: none; display: flex; align-items: center; gap: 0.4rem; }
+  details.help summary::before { content: "›"; transition: transform 0.2s; display: inline-block; }
+  details.help[open] summary::before { transform: rotate(90deg); }
+  details.help ol { margin: 0.8rem 0 0.3rem 1.3rem; font-size: 0.88rem; color: var(--dim); }
+  details.help li { margin: 0.4rem 0; }
+  details.help b { color: var(--text); font-weight: 600; }
+  kbd {
+    font-family: var(--mono); font-size: 0.78em;
+    background: rgba(255,255,255,0.08); border: 1px solid var(--border);
+    border-bottom-width: 2px; border-radius: 5px; padding: 0.06em 0.4em;
+  }
+  code { font-family: var(--mono); font-size: 0.85em; background: rgba(255,255,255,0.08); border-radius: 5px; padding: 0.1em 0.35em; }
+
+  .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 0.8rem; margin-top: 1.3rem; }
+  .stat {
+    background: rgba(0,0,0,0.3);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 0.95rem 1rem;
+  }
+  .stat .n { font-size: 1.7rem; font-weight: 700; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+  .stat .l { font-size: 0.78rem; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; }
+  .stat.hot { border-color: rgba(250,35,59,0.45); background: rgba(250,35,59,0.09); }
+  .stat.hot .n { background: var(--grad); -webkit-background-clip: text; background-clip: text; color: transparent; }
+
+  .fav-list { margin-top: 0.9rem; display: none; max-height: 210px; overflow: auto; border: 1px solid var(--border); border-radius: 12px; }
+  .fav-list.open { display: block; }
+  .fav-list div { padding: 0.42rem 0.9rem; font-size: 0.84rem; color: var(--dim); border-bottom: 1px solid rgba(255,255,255,0.05); }
+  .fav-list div:last-child { border-bottom: none; }
+  .link-btn { background: none; border: none; color: var(--red-2); font: inherit; font-size: 0.84rem; cursor: pointer; padding: 0; margin-top: 0.7rem; }
+  .link-btn:hover { text-decoration: underline; }
+
+  .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; margin-top: 1rem; }
+  @media (max-width: 600px) { .actions { grid-template-columns: 1fr; } }
+  .action {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 1.4rem;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .action h3 { font-size: 1rem; font-weight: 700; }
+  .action p { font-size: 0.85rem; color: var(--dim); flex: 1; }
+  .arm {
+    width: 100%;
+    background: rgba(0,0,0,0.35); border: 1px solid var(--border); border-radius: 10px;
+    color: var(--text); font-family: var(--mono); font-size: 0.85rem;
+    padding: 0.55rem 0.8rem; margin-bottom: 0.6rem;
+    text-align: center; letter-spacing: 0.15em;
+  }
+  .arm:focus { outline: none; border-color: var(--red); }
+
+  .bar-track { height: 8px; background: rgba(255,255,255,0.08); border-radius: 99px; overflow: hidden; margin-top: 1.2rem; }
+  .bar-fill { height: 100%; width: 0%; background: var(--grad); border-radius: 99px; transition: width 0.3s var(--ease); }
+  .run-meta { display: flex; justify-content: space-between; margin-top: 0.6rem; font-size: 0.85rem; color: var(--dim); font-variant-numeric: tabular-nums; }
+  .log { margin-top: 1.1rem; font-family: var(--mono); font-size: 0.76rem; color: var(--dim); max-height: 150px; overflow: auto; }
+  .log div { padding: 0.12rem 0; }
+
+  .result-icon { width: 60px; height: 60px; border-radius: 50%; display: grid; place-items: center; font-size: 1.7rem; margin: 0 auto 1rem; }
+  .result-icon.good { background: rgba(48,209,88,0.15); border: 1px solid rgba(48,209,88,0.4); }
+  .result-icon.warn { background: rgba(255,214,10,0.12); border: 1px solid rgba(255,214,10,0.35); }
+  #result { text-align: center; }
+  #result .nums { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
+  #result .fails { text-align: left; margin-top: 1rem; font-size: 0.82rem; color: var(--dim); max-height: 130px; overflow: auto; background: rgba(0,0,0,0.3); border-radius: 12px; padding: 0.8rem 1rem; }
+  #result .btn { width: auto; margin: 1.5rem auto 0; }
+
+  .note { display: flex; gap: 0.6rem; align-items: flex-start; font-size: 0.82rem; color: var(--dim); margin-top: 1.2rem; }
+  footer { text-align: center; margin-top: 2.5rem; font-size: 0.78rem; color: rgba(255,255,255,0.3); }
+  footer a { color: inherit; }
+</style>
+</head>
+<body>
+<div class="shell">
+
+  <div class="brand">
+    <div class="brand-mark">🧹</div>
+    <div>
+      <h1>Apple Music Cleaner</h1>
+      <p>Un-favorite everything. Or wipe it all.</p>
+    </div>
+  </div>
+
+  <!-- CONNECT -->
+  <section class="view active card" id="connect">
+    <h2>Connect your account</h2>
+    <p class="sub">Paste the two headers from your logged-in music.apple.com session. They stay between this server and Apple.</p>
+
+    <label for="devToken">authorization <span style="text-transform:none;font-weight:400">(without “Bearer ”)</span></label>
+    <textarea id="devToken" rows="3" spellcheck="false" placeholder="eyJ0eXAiOiJKV1QiLCJhbGciOiJFUzI1NiIs…"></textarea>
+    <div class="hint" id="devHint"></div>
+
+    <label for="userToken">media-user-token</label>
+    <textarea id="userToken" rows="3" spellcheck="false" placeholder="Aq3…=="></textarea>
+    <div class="hint" id="userHint"></div>
+
+    <button class="btn btn-primary" id="connectBtn"><span class="spinner"></span><span id="connectLabel">Connect</span></button>
+    <div class="hint bad" id="connectError" style="margin-top:0.8rem"></div>
+
+    <details class="help">
+      <summary>How do I find these?</summary>
+      <ol>
+        <li>Open <b>music.apple.com</b> and <b>sign in</b>.</li>
+        <li>Open DevTools — <kbd>F12</kbd> or <kbd>⌘⌥I</kbd> — and pick the <b>Network</b> tab.</li>
+        <li>Filter for <code>amp-api</code>, then click around your Library until requests appear.</li>
+        <li>Select any request → <b>Request Headers</b>:<br>
+          <code>authorization</code> → copy everything <b>after</b> “Bearer ”<br>
+          <code>media-user-token</code> → copy the whole value</li>
+      </ol>
+    </details>
+  </section>
+
+  <!-- DASHBOARD -->
+  <section class="view" id="dash">
+    <div class="card">
+      <h2>Your library</h2>
+      <p class="sub">Here's what's currently on this account.</p>
+      <div class="stats">
+        <div class="stat"><div class="n" id="st-songs">–</div><div class="l">Songs</div></div>
+        <div class="stat"><div class="n" id="st-albums">–</div><div class="l">Albums</div></div>
+        <div class="stat"><div class="n" id="st-playlists">–</div><div class="l">Playlists</div></div>
+        <div class="stat"><div class="n" id="st-mv">–</div><div class="l">Music videos</div></div>
+        <div class="stat hot"><div class="n" id="st-favs">–</div><div class="l">Favorites</div></div>
+      </div>
+      <button class="link-btn" id="favToggle" hidden>View favorited tracks</button>
+      <div class="fav-list" id="favList"></div>
+    </div>
+
+    <div class="actions">
+      <div class="action">
+        <h3>💔 Un-favorite everything</h3>
+        <p>Removes the favorite rating from every favorited song. Your library itself stays untouched.</p>
+        <button class="btn btn-danger" id="favBtn">Remove all favorites</button>
+      </div>
+      <div class="action">
+        <h3>🧨 Wipe entire library</h3>
+        <p>Deletes all playlists, albums, music videos, songs and every rating. Type <b>DELETE</b> to arm.</p>
+        <input class="arm" id="armInput" placeholder="DELETE" autocomplete="off" spellcheck="false">
+        <button class="btn btn-danger" id="wipeBtn" disabled>Wipe everything</button>
+      </div>
+    </div>
+
+    <div class="note">⚠️ <span>Deletions are permanent — there is no undo. Purchased music stays owned by your Apple ID. Listening history and recommendations can't be touched by Apple's API; they fade once the library is empty.</span></div>
+  </section>
+
+  <!-- RUNNING -->
+  <section class="view card" id="run">
+    <h2 id="runTitle">Working…</h2>
+    <p class="sub" id="runPhase">Starting</p>
+    <div class="bar-track"><div class="bar-fill" id="barFill"></div></div>
+    <div class="run-meta"><span id="runCount"></span><span id="runPct"></span></div>
+    <div class="log" id="runLog"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section class="view card" id="result">
+    <div class="result-icon good" id="resultIcon">✓</div>
+    <h2 id="resultTitle">Done</h2>
+    <div class="nums" id="resultNums"></div>
+    <p class="sub" id="resultSub"></p>
+    <div class="fails" id="resultFails" hidden></div>
+    <button class="btn btn-ghost" id="backBtn">← Back to library</button>
+  </section>
+
+  <footer>Uses a private Apple API — your account, your responsibility. Not affiliated with Apple. · <a href="https://github.com/mpellouin/apple-music-cleaner">Source</a></footer>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const views = ['connect', 'dash', 'run', 'result'];
+  const show = (id) => views.forEach((v) => $(v).classList.toggle('active', v === id));
+  const tokens = { devToken: '', userToken: '' };
+
+  // ---- token validation ----
+  function checkJwt(t) {
+    if (!t) return { ok: false, msg: '' };
+    if (t.startsWith('Bearer ')) return { ok: false, msg: 'Drop the “Bearer ” prefix.' };
+    const parts = t.split('.');
+    if (parts.length !== 3 || !t.startsWith('eyJ')) return { ok: false, msg: 'Should be a three-part token starting with “eyJ”.' };
+    try {
+      const p = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (p.exp * 1000 < Date.now()) return { ok: false, msg: 'Expired ' + new Date(p.exp * 1000).toLocaleDateString() + ' — grab a fresh one.' };
+      return { ok: true, msg: 'Valid · expires ' + new Date(p.exp * 1000).toLocaleDateString() };
+    } catch { return { ok: false, msg: 'Could not decode — check the copy.' }; }
+  }
+  function validate() {
+    const dev = $('devToken').value.trim();
+    const user = $('userToken').value.trim();
+    const d = checkJwt(dev);
+    $('devHint').textContent = d.msg;
+    $('devHint').className = 'hint ' + (d.msg ? (d.ok ? 'ok' : 'bad') : '');
+    const uOk = user.length > 20;
+    $('userHint').textContent = user ? (uOk ? 'Looks good' : 'Seems too short') : '';
+    $('userHint').className = 'hint ' + (user ? (uOk ? 'ok' : 'bad') : '');
+    $('connectBtn').disabled = !(d.ok && uOk);
+    return d.ok && uOk ? { devToken: dev, userToken: user } : null;
+  }
+  $('devToken').addEventListener('input', validate);
+  $('userToken').addEventListener('input', validate);
+  $('connectBtn').disabled = true;
+
+  // ---- NDJSON streaming ----
+  async function stream(url, body, onEvent) {
+    const res = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
+    const reader = res.body.getReader();
+    const dec = new TextDecoder();
+    let buf = '';
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, { stream: true });
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, i).trim();
+        buf = buf.slice(i + 1);
+        if (line) onEvent(JSON.parse(line));
+      }
+    }
+  }
+
+  // ---- count-up animation ----
+  function countUp(el, target) {
+    const dur = 600, t0 = performance.now();
+    const tick = (t) => {
+      const k = Math.min(1, (t - t0) / dur);
+      el.textContent = Math.round(target * (1 - Math.pow(1 - k, 3))).toLocaleString();
+      if (k < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+  }
+
+  // ---- connect / inventory ----
+  const statIds = { playlists: 'st-playlists', albums: 'st-albums', 'music videos': 'st-mv', songs: 'st-songs' };
+  let favTracks = [];
+
+  async function loadInventory() {
+    let error = null;
+    favTracks = [];
+    await stream('/api/inventory', tokens, (ev) => {
+      if (ev.event === 'category') countUp($(statIds[ev.key]), ev.count);
+      if (ev.event === 'favorites') { countUp($('st-favs'), ev.count); favTracks = ev.tracks; }
+      if (ev.event === 'error') error = ev.message;
+    });
+    if (error) throw new Error(error);
+    $('favToggle').hidden = favTracks.length === 0;
+    $('favBtn').disabled = favTracks.length === 0;
+    $('favBtn').textContent = favTracks.length ? `Remove all ${favTracks.length} favorites` : 'No favorites found';
+    $('favList').innerHTML = favTracks.map((t) => `<div>${t.replace(/</g, '&lt;')}</div>`).join('');
+    $('favList').classList.remove('open');
+    $('favToggle').textContent = 'View favorited tracks';
+  }
+
+  $('connectBtn').addEventListener('click', async () => {
+    const v = validate();
+    if (!v) return;
+    Object.assign(tokens, v);
+    $('connectBtn').classList.add('loading');
+    $('connectLabel').textContent = 'Reading your library…';
+    $('connectError').textContent = '';
+    show('dash');
+    try {
+      await loadInventory();
+    } catch (e) {
+      show('connect');
+      $('connectError').textContent = e.message;
+    } finally {
+      $('connectBtn').classList.remove('loading');
+      $('connectLabel').textContent = 'Connect';
+    }
+  });
+
+  $('favToggle').addEventListener('click', () => {
+    const open = $('favList').classList.toggle('open');
+    $('favToggle').textContent = open ? 'Hide favorited tracks' : 'View favorited tracks';
+  });
+
+  // ---- arming the wipe ----
+  $('armInput').addEventListener('input', () => {
+    $('wipeBtn').disabled = $('armInput').value.trim() !== 'DELETE';
+  });
+
+  // ---- run a clean ----
+  async function runClean(mode, title) {
+    show('run');
+    $('runTitle').textContent = title;
+    $('runPhase').textContent = 'Starting…';
+    $('barFill').style.width = '0%';
+    $('runCount').textContent = '';
+    $('runPct').textContent = '';
+    $('runLog').innerHTML = '';
+    const log = (m) => {
+      const d = document.createElement('div');
+      d.textContent = m;
+      $('runLog').prepend(d);
+    };
+    let summary = null, error = null;
+    await stream('/api/clean', { ...tokens, mode }, (ev) => {
+      if (ev.event === 'phase') { $('runPhase').textContent = ev.label; log('▸ ' + ev.label); }
+      if (ev.event === 'category') log(`  ${ev.key}: ${ev.count}`);
+      if (ev.event === 'found') log(`  ${ev.count} item(s) to process`);
+      if (ev.event === 'progress') {
+        const pct = ev.total ? Math.round((ev.done / ev.total) * 100) : 0;
+        $('barFill').style.width = pct + '%';
+        $('runCount').textContent = `${ev.done.toLocaleString()} / ${ev.total.toLocaleString()}`;
+        $('runPct').textContent = pct + '%';
+      }
+      if (ev.event === 'done') summary = ev;
+      if (ev.event === 'error') error = ev.message;
+    });
+    if (error) {
+      $('resultIcon').className = 'result-icon warn';
+      $('resultIcon').textContent = '!';
+      $('resultTitle').textContent = 'Something went wrong';
+      $('resultNums').textContent = '';
+      $('resultSub').textContent = error;
+      $('resultFails').hidden = true;
+    } else {
+      const clean = summary.failed === 0;
+      $('resultIcon').className = 'result-icon ' + (clean ? 'good' : 'warn');
+      $('resultIcon').textContent = clean ? '✓' : '!';
+      $('resultTitle').textContent = clean ? 'All clean' : 'Done, with a hiccup';
+      $('resultNums').textContent = summary.deleted.toLocaleString() + ' deleted';
+      $('resultSub').textContent = clean
+        ? (summary.deleted === 0 ? 'There was nothing to remove.' : 'Everything went through.')
+        : `${summary.failed} item(s) could not be deleted. Note: Apple never allows deleting the system Favorite Songs playlist — a failure there is expected.`;
+      $('resultFails').hidden = summary.failed === 0;
+      $('resultFails').innerHTML = (summary.failures || []).map((f) => `<div>• ${String(f).replace(/</g, '&lt;')}</div>`).join('');
+    }
+    show('result');
+  }
+
+  $('favBtn').addEventListener('click', () => {
+    if (confirm(`Remove the favorite rating from ${favTracks.length} song(s)?\n\nThis cannot be undone.`)) {
+      runClean('favorites', 'Removing favorites');
+    }
+  });
+  $('wipeBtn').addEventListener('click', () => {
+    if (confirm('PERMANENTLY delete your entire Apple Music library?\n\nPlaylists, albums, music videos, songs, ratings — everything. This cannot be undone.')) {
+      $('armInput').value = '';
+      $('wipeBtn').disabled = true;
+      runClean('wipe', 'Wiping library');
+    }
+  });
+  $('backBtn').addEventListener('click', async () => {
+    show('dash');
+    await loadInventory().catch((e) => {
+      show('connect');
+      $('connectError').textContent = e.message;
+    });
+  });
+</script>
+</body>
+</html>
