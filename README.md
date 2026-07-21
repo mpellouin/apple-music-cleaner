@@ -82,7 +82,55 @@ npm start -- wipe                  # dry run: inventory only
 npm start -- wipe --execute        # actually delete everything
 ```
 
-Options: `--playlist "<name>"` targets a favorites playlist the auto-detection missed (names vary by locale); `--scan` forces a full library scan instead of using the Favorite Songs playlist.
+Options:
+
+| Flag | Effect |
+|---|---|
+| `--playlist "<name>"` | Target a favorites playlist the auto-detection missed (names vary by locale) |
+| `--scan` | Force a full library scan instead of using the Favorite Songs playlist |
+| `--no-plays-within <days>` | Only remove favorites absent from Apple's recent-played feed (approximates "0 plays in N days") |
+| `probe-history` | Show how many recent-played entries the API returns (useful before `--no-plays-within`) |
+
+```sh
+# Remove favorites you haven't played recently (dry run)
+npm start -- --no-plays-within 90
+
+# Actually remove them
+npm start -- --no-plays-within 90 --execute
+
+# Inspect how much play history the API exposes on your account
+npm start -- probe-history
+```
+
+**Note:** Apple does not expose per-track play counts or a full play log. `--no-plays-within` compares favorites against the bounded `/v1/me/recent/played/tracks` feed — run `probe-history` first to see how deep that feed goes on your account.
+
+## FAQ
+
+### How do I bulk remove all Apple Music favorites without a paid developer account?
+
+Clone this repo, paste your two web-player tokens (see [Getting your two tokens](#getting-your-two-tokens)), then run `npm start -- --execute`. Default is dry-run — it lists favorites without deleting.
+
+### Can I delete Apple Music liked songs from the command line?
+
+Yes. `npm start -- --execute` removes the favorite rating from every favorited track. Use `--no-plays-within 90 --execute` to remove only favorites you haven't played recently.
+
+### How is this different from Apple MusicKit?
+
+| | apple-music-cleaner | MusicKit (official) |
+|---|---|---|
+| Apple Developer account | Not required | Paid account required |
+| Auth | Copy tokens from music.apple.com DevTools | OAuth consent flow |
+| API | Private web-player API | Documented public API |
+| Bulk remove favorites | Yes | Possible with dev setup |
+| Wipe entire library | Yes | Not a built-in feature |
+
+### Does this clear my Apple Music play history or recommendations?
+
+No. The tool can read a **bounded** recent-played feed to support selective cleanup, but it cannot wipe your full listening history or reset Apple's recommendation profile. After a library wipe, recommendations fade over time; Apple Support can hard-reset them on request.
+
+### Is this safe? Will Apple ban my account?
+
+This uses the same API as the music.apple.com web player on your own account. It's not officially sanctioned — see [Run this at your own risk](#run-this-at-your-own-risk). Treat tokens like passwords.
 
 ## What it can and cannot delete
 
@@ -90,7 +138,7 @@ Options: `--playlist "<name>"` targets a favorites playlist the auto-detection m
 
 **Cannot:**
 - The system **Favorite Songs** playlist itself — Apple rejects that deletion server-side, so it just ends up empty (one "failure" there during a wipe is expected).
-- Your **listening/play history** and **recommendation profile** — no API endpoints exist. Recommendations fade once your library is empty; Apple Support can hard-reset them on request.
+- Your full **listening history** or **recommendation profile** — only a bounded recent-played feed is readable; nothing clears history or resets recommendations via API. Recommendations fade once your library is empty; Apple Support can hard-reset them on request.
 - **Purchases** — purchased music stays tied to your Apple ID even after removal from the library view.
 
 ## License
