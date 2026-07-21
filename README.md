@@ -62,7 +62,16 @@ Then in your browser:
 
 1. **Connect** — paste the two tokens. The app validates them locally and shows the JWT's expiry date.
 2. **Review** — it loads your library and shows live counts: songs, albums, playlists, music videos, favorites (with an expandable track list).
-3. **Clean** — either **Remove all favorites**, or **Wipe entire library** (which only arms after you type `DELETE`, then asks for a final confirmation). A progress bar and log track every deletion, and a summary reports anything that failed.
+3. **Clean** — selective cleanup (presets + preview), remove all favorites, delete empty playlists, or wipe the entire library (type `DELETE` to arm). Preview buttons dry-run before destructive actions.
+
+## Install
+
+```sh
+npm install -g apple-music-cleaner   # or clone + npm install
+npx apple-music-cleaner presets      # list built-in presets
+```
+
+Requires Node.js 20+. Site: [mpellouin.github.io/apple-music-cleaner](https://mpellouin.github.io/apple-music-cleaner/) · AI index: [`llms.txt`](llms.txt)
 
 ## CLI usage
 
@@ -77,12 +86,130 @@ Every command is a **dry run by default** — it lists what it found and deletes
 npm start                          # dry run: list favorites
 npm start -- --execute             # actually remove them
 
-# Wipe the entire library: playlists, albums, music videos, songs, ratings
-npm start -- wipe                  # dry run: inventory only
-npm start -- wipe --execute        # actually delete everything
+# Remove only stale favorites (no recent play)
+npm start -- --no-plays-within 90 --execute
+
+# Remove dislikes only
+npm start -- dislikes --execute
+
+# Wipe scoped to songs and playlists only, skip purchased music
+npm start -- wipe --category songs,playlists --exclude-purchased --execute
+
+# Clear dislike ratings without deleting library items
+npm start -- wipe --dislikes-only --execute
+
+# Export targets to CSV before deleting
+npm start -- --artist "Various Artists" --export stale.csv --execute
 ```
 
-Options: `--playlist "<name>"` targets a favorites playlist the auto-detection missed (names vary by locale); `--scan` forces a full library scan instead of using the Favorite Songs playlist.
+# Use a preset (dry run)
+npm start -- --preset stale-favorites
+
+# Remove favorites added more than a year ago
+npm start -- --added-before 365 --execute
+
+# Duplicate favorites, orphan albums, outside heavy rotation
+npm start -- --duplicates-only --execute
+npm start -- --orphan-album --execute
+npm start -- --outside-heavy-rotation --execute
+
+# Delete empty playlists
+npm start -- empty-playlists --execute
+
+# Snapshot before/after cleanup
+npm start -- snapshot save before.json
+npm start -- snapshot compare before.json
+
+# Retry failed deletions
+npm start -- resume failures.json --execute
+
+# Cron-friendly (non-interactive)
+AMC_EXECUTE=1 npm start -- --preset spring-clean --execute --failure-log failures.json
+```
+
+### Commands
+
+| Command | Effect |
+|---|---|
+| `favorites` (default) | Remove favorite ratings (optionally filtered) |
+| `dislikes` | Remove dislike ratings |
+| `wipe` | Delete library items and/or clear ratings |
+| `empty-playlists` | Delete playlists with zero tracks |
+| `probe-history` | Inspect recent-played API depth |
+| `probe-added` | Inspect recently-added API |
+| `probe-rotation` | Inspect heavy-rotation feed |
+| `presets` | List built-in cleanup presets |
+| `snapshot save\|compare <file>` | Save or compare inventory snapshots |
+| `resume <log.json>` | Retry deletions from a failure log |
+
+### Options
+
+| Flag | Applies to | Effect |
+|---|---|---|
+| `--execute` | all | Actually delete (default is dry run) |
+| `--preset <name>` | favorites, dislikes | Built-in rule preset (`presets` command) |
+| `--scan` | favorites | Full library scan instead of Favorite Songs playlist |
+| `--no-plays-within <days>` | favorites, dislikes | Absent from recent-played feed |
+| `--never-played` | favorites, dislikes | Not in recent-played feed |
+| `--added-before <days>` | favorites, dislikes | `dateAdded` older than N days |
+| `--duplicates-only` | favorites | Duplicate catalog id / title entries |
+| `--orphan-album` | favorites | Album no longer in library |
+| `--outside-heavy-rotation` | favorites | Not in heavy-rotation feed |
+| `--artist`, `--exclude-artist`, `--title` | favorites, dislikes | Text filters |
+| `--keep-file`, `--exclude-purchased`, `--export` | favorites, dislikes | Safety & export |
+| `--failure-log`, `--verbose` | favorites, dislikes, wipe | Resume support & full preview |
+| `--category`, `--dislikes-only` | wipe | Scoped wipe |
+
+```sh
+npm start -- probe-history
+npm start -- probe-added
+npm start -- probe-rotation
+npm start -- presets
+```
+
+**Note:** Play counts are not exposed by API. `--no-plays-within` uses the bounded recent-played feed. For richer play data on Mac, see [docs/mac-library-db.md](docs/mac-library-db.md).
+
+### Web app
+
+Selective cleanup wizard with presets, preview-with-reasons, empty playlists, and token expiry notice.
+
+### Advanced docs (Tier D)
+
+| Doc | Topic |
+|---|---|
+| [docs/mac-library-db.md](docs/mac-library-db.md) | Music.app SQLite on macOS |
+| [docs/applescript.md](docs/applescript.md) | Shortcuts, cron, AppleScript |
+| [docs/recommendations-reset.md](docs/recommendations-reset.md) | Reset taste profile after wipe |
+
+Enable GitHub Pages manually: repo **Settings → Pages →** source **Deploy from branch →** branch `main`, folder `/docs`.
+
+## FAQ
+
+### How do I bulk remove all Apple Music favorites without a paid developer account?
+
+Clone this repo, paste your two web-player tokens (see [Getting your two tokens](#getting-your-two-tokens)), then run `npm start -- --execute`. Default is dry-run — it lists favorites without deleting.
+
+### Can I delete Apple Music liked songs from the command line?
+
+Yes. `npm start -- --execute` removes the favorite rating from every favorited track. Use `--no-plays-within 90 --execute` to remove only favorites you haven't played recently.
+
+### How is this different from Apple MusicKit?
+
+| | apple-music-cleaner | MusicKit (official) |
+|---|---|---|
+| Apple Developer account | Not required | Paid account required |
+| Auth | Copy tokens from music.apple.com DevTools | OAuth consent flow |
+| API | Private web-player API | Documented public API |
+| Bulk remove favorites | Yes | Possible with dev setup |
+| Wipe entire library | Yes | Not a built-in feature |
+
+### Does this clear my Apple Music play history or recommendations?
+
+No. The tool can read a **bounded** recent-played feed to support selective cleanup, but it cannot wipe your full listening history or reset Apple's recommendation profile. After a library wipe, recommendations fade over time; Apple Support can hard-reset them on request.
+
+### Is this safe? Will Apple ban my account?
+
+This uses the same API as the music.apple.com web player on your own account. It's not officially sanctioned — see [Run this at your own risk](#run-this-at-your-own-risk). Treat tokens like passwords.
 
 ## What it can and cannot delete
 
@@ -90,7 +217,7 @@ Options: `--playlist "<name>"` targets a favorites playlist the auto-detection m
 
 **Cannot:**
 - The system **Favorite Songs** playlist itself — Apple rejects that deletion server-side, so it just ends up empty (one "failure" there during a wipe is expected).
-- Your **listening/play history** and **recommendation profile** — no API endpoints exist. Recommendations fade once your library is empty; Apple Support can hard-reset them on request.
+- Your full **listening history** or **recommendation profile** — only a bounded recent-played feed is readable; nothing clears history or resets recommendations via API. Recommendations fade once your library is empty; Apple Support can hard-reset them on request.
 - **Purchases** — purchased music stays tied to your Apple ID even after removal from the library view.
 
 ## License
