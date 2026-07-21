@@ -181,6 +181,8 @@ Selective cleanup wizard with presets, preview-with-reasons, empty playlists, an
 | [docs/applescript.md](docs/applescript.md) | Shortcuts, cron, AppleScript |
 | [docs/recommendations-reset.md](docs/recommendations-reset.md) | Reset taste profile after wipe |
 
+Enable GitHub Pages manually: repo **Settings → Pages →** source **Deploy from branch →** branch `main`, folder `/docs`.
+
 ## FAQ
 
 ### How do I bulk remove all Apple Music favorites without a paid developer account?
