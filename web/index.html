@@ -239,10 +239,31 @@
 
     <div class="actions">
       <div class="action">
+        <h3>🎯 Selective cleanup</h3>
+        <p>Apply a preset rule, preview matches with reasons, then remove.</p>
+        <label for="presetSelect">Preset</label>
+        <select id="presetSelect" style="width:100%;margin-bottom:0.6rem;padding:0.55rem;border-radius:10px;background:rgba(0,0,0,0.35);border:1px solid var(--border);color:var(--text)">
+          <option value="stale-favorites">Stale favorites (90d no play)</option>
+          <option value="spring-clean">Spring clean (180d, no purchased)</option>
+          <option value="duplicates">Duplicate favorites</option>
+          <option value="orphan-albums">Orphan album favorites</option>
+          <option value="outside-heavy-rotation">Outside heavy rotation</option>
+          <option value="old-favorites">Added over 365 days ago</option>
+        </select>
+        <button class="btn btn-ghost" id="selectivePreviewBtn">Preview selective cleanup</button>
+        <button class="btn btn-danger" id="selectiveRunBtn">Run selective cleanup</button>
+      </div>
+      <div class="action">
         <h3>💔 Un-favorite everything</h3>
         <p>Removes the favorite rating from every favorited song. Your library itself stays untouched.</p>
         <button class="btn btn-ghost" id="favPreviewBtn">Preview removal</button>
         <button class="btn btn-danger" id="favBtn">Remove all favorites</button>
+      </div>
+      <div class="action">
+        <h3>📂 Empty playlists</h3>
+        <p>Delete playlists that contain zero tracks.</p>
+        <button class="btn btn-ghost" id="emptyPreviewBtn">Preview empty playlists</button>
+        <button class="btn btn-danger" id="emptyRunBtn">Delete empty playlists</button>
       </div>
       <div class="action">
         <h3>🧨 Wipe entire library</h3>
@@ -252,6 +273,8 @@
         <button class="btn btn-danger" id="wipeBtn" disabled>Wipe everything</button>
       </div>
     </div>
+
+    <div class="note" id="tokenNote" hidden></div>
 
     <div class="note">⚠️ <span>Deletions are permanent — there is no undo. Purchased music stays owned by your Apple ID. Listening history and recommendations can't be touched by Apple's API; they fade once the library is empty.</span></div>
   </section>
@@ -352,10 +375,15 @@
     await stream('/api/inventory', tokens, (ev) => {
       if (ev.event === 'category') countUp($(statIds[ev.key]), ev.count);
       if (ev.event === 'favorites') { countUp($('st-favs'), ev.count); favTracks = ev.tracks; }
+      if (ev.event === 'token' && ev.message) {
+        $('tokenNote').hidden = false;
+        $('tokenNote').innerHTML = '🔑 <span>' + ev.message.replace(/</g, '&lt;') + '</span>';
+      }
       if (ev.event === 'error') error = ev.message;
     });
     if (error) throw new Error(error);
     $('favToggle').hidden = favTracks.length === 0;
+    $('favPreviewBtn').disabled = favTracks.length === 0;
     $('favBtn').disabled = favTracks.length === 0;
     $('favPreviewBtn').disabled = favTracks.length === 0;
     $('favBtn').textContent = favTracks.length ? `Remove all ${favTracks.length} favorites` : 'No favorites found';
@@ -394,7 +422,7 @@
   });
 
   // ---- run a clean ----
-  async function runClean(mode, title, dryRun = false) {
+  async function runClean(mode, title, dryRun = false, extra = {}) {
     show('run');
     $('runTitle').textContent = title;
     $('runPhase').textContent = dryRun ? 'Building preview…' : 'Starting…';
@@ -408,7 +436,7 @@
       $('runLog').prepend(d);
     };
     let summary = null, error = null;
-    await stream('/api/clean', { ...tokens, mode, dryRun }, (ev) => {
+    await stream('/api/clean', { ...tokens, mode, dryRun, ...extra }, (ev) => {
       if (ev.event === 'phase') { $('runPhase').textContent = ev.label; log('▸ ' + ev.label); }
       if (ev.event === 'category') log(`  ${ev.key}: ${ev.count}`);
       if (ev.event === 'found') log(`  ${ev.count} item(s) to process`);
@@ -432,7 +460,14 @@
       $('resultIcon').className = 'result-icon good';
       $('resultIcon').textContent = '👁';
       $('resultTitle').textContent = 'Preview only — nothing deleted';
-      if (summary.preview && Array.isArray(summary.preview)) {
+      if (summary.preview && Array.isArray(summary.preview) && summary.preview[0]?.reasons) {
+        $('resultNums').textContent = summary.preview.length.toLocaleString() + ' tracks';
+        $('resultSub').textContent = 'Selective cleanup matches:';
+        $('resultFails').hidden = summary.preview.length === 0;
+        $('resultFails').innerHTML = summary.preview.slice(0, 50).map((f) =>
+          `<div>• ${String(f.label).replace(/</g, '&lt;')} <em style="color:var(--dim)">${(f.reasons || []).join('; ')}</em></div>`
+        ).join('') + (summary.preview.length > 50 ? `<div>… and ${summary.preview.length - 50} more</div>` : '');
+      } else if (summary.preview && Array.isArray(summary.preview)) {
         $('resultNums').textContent = summary.preview.length.toLocaleString() + ' favorites';
         $('resultSub').textContent = 'These tracks would lose their favorite rating. Click “Remove all favorites” to proceed.';
         $('resultFails').hidden = summary.preview.length === 0;
@@ -462,12 +497,26 @@
     show('result');
   }
 
+  $('selectivePreviewBtn').addEventListener('click', () => {
+    runClean('selective', 'Previewing selective cleanup', true, { preset: $('presetSelect').value });
+  });
+  $('selectiveRunBtn').addEventListener('click', () => {
+    if (confirm('Remove favorites matching the selected preset?\n\nThis cannot be undone.')) {
+      runClean('selective', 'Selective cleanup', false, { preset: $('presetSelect').value });
+    }
+  });
   $('favPreviewBtn').addEventListener('click', () => {
     runClean('favorites', 'Previewing favorites', true);
   });
   $('favBtn').addEventListener('click', () => {
     if (confirm(`Remove the favorite rating from ${favTracks.length} song(s)?\n\nThis cannot be undone.`)) {
       runClean('favorites', 'Removing favorites');
+    }
+  });
+  $('emptyPreviewBtn').addEventListener('click', () => runClean('empty-playlists', 'Previewing empty playlists', true));
+  $('emptyRunBtn').addEventListener('click', () => {
+    if (confirm('Delete all empty playlists?\n\nThis cannot be undone.')) {
+      runClean('empty-playlists', 'Deleting empty playlists');
     }
   });
   $('wipePreviewBtn').addEventListener('click', () => {
