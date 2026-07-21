@@ -3,6 +3,7 @@ import type { AppleMusicClient } from './client.js'
 export interface WipeItem {
   id: string
   catalogId?: string
+  purchasedId?: string
   label: string
 }
 
@@ -48,7 +49,7 @@ interface LibraryResource {
     name?: string
     artistName?: string
     curatorName?: string
-    playParams?: { catalogId?: string }
+    playParams?: { catalogId?: string; purchasedId?: string }
   }
 }
 
@@ -87,6 +88,7 @@ export async function listCategory(client: AppleMusicClient, cat: CategoryDef): 
     items.push({
       id: r.id,
       catalogId: a?.playParams?.catalogId,
+      purchasedId: a?.playParams?.purchasedId,
       label: [a?.name ?? '(unnamed)', a?.artistName ?? a?.curatorName].filter(Boolean).join(' — '),
     })
   }
@@ -124,14 +126,30 @@ export async function findRatings(
   client: AppleMusicClient,
   cat: CategoryDef,
   items: WipeItem[],
+  wantValue?: number,
 ): Promise<RatingTarget[]> {
   const targets: RatingTarget[] = []
-  const libRated = await ratedIds(client, cat.libraryRatingType, items.map((i) => i.id))
+  const libRated = await ratedIds(client, cat.libraryRatingType, items.map((i) => i.id), wantValue)
   targets.push(...libRated.map((id) => ({ ratingType: cat.libraryRatingType, id })))
   const catalogIds = [...new Set(items.map((i) => i.catalogId).filter((id): id is string => Boolean(id)))]
-  const catRated = await ratedIds(client, cat.catalogRatingType, catalogIds)
+  const catRated = await ratedIds(client, cat.catalogRatingType, catalogIds, wantValue)
   targets.push(...catRated.map((id) => ({ ratingType: cat.catalogRatingType, id })))
   return targets
+}
+
+export function categoriesForKeys(keys?: string[]): CategoryDef[] {
+  if (!keys || keys.length === 0) return CATEGORIES
+  const want = new Set(keys.map((k) => k.toLowerCase()))
+  const matched = CATEGORIES.filter((c) => want.has(c.key))
+  if (matched.length === 0) {
+    throw new Error(`Unknown category. Choose from: ${CATEGORIES.map((c) => c.key).join(', ')}`)
+  }
+  return matched
+}
+
+export function filterPurchased(items: WipeItem[]): { items: WipeItem[]; skipped: number } {
+  const kept = items.filter((i) => !i.purchasedId)
+  return { items: kept, skipped: items.length - kept.length }
 }
 
 export async function deleteRatings(
