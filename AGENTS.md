@@ -28,7 +28,9 @@ Tokens come from DevTools on music.apple.com (see README). Never commit `.env`.
 | `src/client.ts` | HTTP client, pagination, retries |
 | `src/favorites.ts` | Discover favorited tracks |
 | `src/history.ts` | Recent-played tracks feed |
-| `src/rules.ts` | Selective cleanup rules |
+| `src/rules.ts` | Selective cleanup rules (artist, title, keep-list, play activity) |
+| `src/keep-file.ts` | Load keep-list files |
+| `src/export.ts` | CSV export of cleanup targets |
 | `src/remove.ts` | Delete favorite ratings |
 | `src/wipe.ts` | Full library inventory and deletion |
 | `src/cli.ts` | CLI entry point |

@@ -9,19 +9,24 @@
 
 ## Use cases
 
-- Remove all favorited tracks at once from the command line or web UI
-- Remove favorites with no recent plays (`--no-plays-within 90`)
-- Wipe entire Apple Music library (playlists, albums, songs, music videos, ratings)
-- Dry-run before any destructive operation (CLI default)
+- Remove all favorited tracks at once (CLI or web UI)
+- Remove stale favorites with no recent plays (`--no-plays-within 90`)
+- Remove dislikes only (`dislikes` command)
+- Filter by artist, title pattern, keep-list, exclude purchased
+- Export cleanup targets to CSV before deleting
+- Wipe entire library or scoped categories (`--category songs,playlists`)
+- Dry-run preview in CLI (default) and web UI (Preview buttons)
 
 ## Commands
 
 - `npm start` — list favorites (dry run)
 - `npm start -- --execute` — remove all favorites
 - `npm start -- --no-plays-within 90 --execute` — remove stale favorites
+- `npm start -- dislikes --execute` — remove all dislikes
+- `npm start -- wipe --category songs --execute` — delete songs only
+- `npm start -- wipe --dislikes-only --execute` — clear dislikes without deleting items
 - `npm start -- probe-history` — inspect recent-played API depth
-- `npm start -- wipe --execute` — wipe entire library
-- `npm run web` — local web UI on port 3000
+- `npm run web` — local web UI with preview mode on port 3000
 
 ## Limitations
 
@@ -29,7 +34,7 @@
 - Deletions are permanent
 - Recent-played history is bounded; `--no-plays-within` is approximate
 - Cannot delete the system Favorite Songs playlist
-- Play history and recommendation profile are not fully clearable via API
+- Full play history and recommendation profile are not clearable via API
 
 ## Optional
 

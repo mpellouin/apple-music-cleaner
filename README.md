@@ -77,32 +77,67 @@ Every command is a **dry run by default** — it lists what it found and deletes
 npm start                          # dry run: list favorites
 npm start -- --execute             # actually remove them
 
-# Wipe the entire library: playlists, albums, music videos, songs, ratings
-npm start -- wipe                  # dry run: inventory only
-npm start -- wipe --execute        # actually delete everything
-```
-
-Options:
-
-| Flag | Effect |
-|---|---|
-| `--playlist "<name>"` | Target a favorites playlist the auto-detection missed (names vary by locale) |
-| `--scan` | Force a full library scan instead of using the Favorite Songs playlist |
-| `--no-plays-within <days>` | Only remove favorites absent from Apple's recent-played feed (approximates "0 plays in N days") |
-| `probe-history` | Show how many recent-played entries the API returns (useful before `--no-plays-within`) |
-
-```sh
-# Remove favorites you haven't played recently (dry run)
-npm start -- --no-plays-within 90
-
-# Actually remove them
+# Remove only stale favorites (no recent play)
 npm start -- --no-plays-within 90 --execute
 
+# Remove dislikes only
+npm start -- dislikes --execute
+
+# Wipe scoped to songs and playlists only, skip purchased music
+npm start -- wipe --category songs,playlists --exclude-purchased --execute
+
+# Clear dislike ratings without deleting library items
+npm start -- wipe --dislikes-only --execute
+
+# Export targets to CSV before deleting
+npm start -- --artist "Various Artists" --export stale.csv --execute
+```
+
+### Commands
+
+| Command | Effect |
+|---|---|
+| `favorites` (default) | Remove favorite ratings (optionally filtered) |
+| `dislikes` | Remove dislike ratings (same filter flags as favorites) |
+| `wipe` | Delete library items and/or clear ratings |
+| `probe-history` | Inspect recent-played API depth on your account |
+
+### Options
+
+| Flag | Applies to | Effect |
+|---|---|---|
+| `--execute` | all | Actually delete (default is dry run) |
+| `--scan` | favorites | Full library scan instead of Favorite Songs playlist |
+| `--playlist "<name>"` | favorites | Override favorites playlist name |
+| `--no-plays-within <days>` | favorites, dislikes | Only remove tracks absent from recent-played feed |
+| `--artist "<name>"` | favorites, dislikes | Artist substring match (case-insensitive) |
+| `--exclude-artist "<name>"` | favorites, dislikes | Skip matching artists |
+| `--title "<pattern>"` | favorites, dislikes | Title match (`/regex/i` or plain substring) |
+| `--keep-file <path>` | favorites, dislikes | Skip tracks listed (catalog id or `Artist — Title`) |
+| `--exclude-purchased` | favorites, dislikes, wipe | Skip purchased tracks/items |
+| `--export <path>` | favorites, dislikes | Write selected targets to CSV |
+| `--category <keys>` | wipe | Comma-separated: `playlists`, `albums`, `music videos`, `songs` |
+| `--dislikes-only` | wipe | Clear dislike ratings only, do not delete items |
+
+```sh
 # Inspect how much play history the API exposes on your account
 npm start -- probe-history
 ```
 
-**Note:** Apple does not expose per-track play counts or a full play log. `--no-plays-within` compares favorites against the bounded `/v1/me/recent/played/tracks` feed — run `probe-history` first to see how deep that feed goes on your account.
+**Note:** Apple does not expose per-track play counts or a full play log. `--no-plays-within` compares against the bounded `/v1/me/recent/played/tracks` feed — run `probe-history` first to see how deep that feed goes on your account.
+
+### Web app previews
+
+The web UI (`npm run web`) includes **Preview removal** and **Preview wipe** buttons — dry-run equivalents before confirming destructive actions.
+
+## Roadmap (not yet implemented)
+
+These were identified as valuable but need more API exploration or larger UX work:
+
+- Never played since added / added-before date rules (`dateAdded`, recently-added endpoint)
+- Duplicate favorites, empty playlists, orphan album cleanup
+- Resume from failure log, saved rule presets, scheduled cron mode
+- npm global install / GitHub Pages with `/llms.txt`
 
 ## FAQ
 
