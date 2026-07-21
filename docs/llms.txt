@@ -1,0 +1,27 @@
+# apple-music-cleaner
+
+> Bulk-remove Apple Music favorites or wipe your library. No paid Apple Developer account. CLI + local web UI.
+
+## Docs
+
+- [README](https://github.com/mpellouin/apple-music-cleaner/blob/main/README.md): Full documentation
+- [AGENTS.md](https://github.com/mpellouin/apple-music-cleaner/blob/main/AGENTS.md): Coding agent guide
+- [Mac library DB](https://github.com/mpellouin/apple-music-cleaner/blob/main/docs/mac-library-db.md): Play counts via Music.app on macOS
+- [Recommendations reset](https://github.com/mpellouin/apple-music-cleaner/blob/main/docs/recommendations-reset.md): Reset taste profile after wipe
+
+## Install
+
+- `npm install -g apple-music-cleaner` or `npx apple-music-cleaner`
+- Requires Node.js 20+
+
+## Commands
+
+- `apple-music-cleaner --preset stale-favorites` — dry-run stale favorites
+- `apple-music-cleaner dislikes --execute` — remove dislikes
+- `apple-music-cleaner empty-playlists --execute` — delete empty playlists
+- `apple-music-cleaner snapshot save before.json` — inventory snapshot
+- `apple-music-cleaner resume failures.json` — retry failed deletions
+
+## Optional
+
+- [LICENSE](https://github.com/mpellouin/apple-music-cleaner/blob/main/LICENSE): MIT
