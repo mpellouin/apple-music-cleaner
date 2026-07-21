@@ -6,7 +6,9 @@ import {
   findFavoritesPlaylistId,
   type FavoriteTrack,
 } from './favorites.js'
+import { fetchRecentPlayedCatalogIds, probeRecentHistory } from './history.js'
 import { removeFavorites } from './remove.js'
+import { describeRule, selectFavoritesForRemoval, type CleanRules } from './rules.js'
 import {
   CATEGORIES,
   deleteItems,
@@ -22,22 +24,26 @@ const HELP = `apple-music-cleaner — clean up your Apple Music account
 Usage: npm start -- [command] [options]
 
 Commands:
-  favorites (default)  Remove the favorite rating from all favorited tracks
+  favorites (default)  Remove the favorite rating from favorited tracks
   wipe                 Delete the entire library: playlists, albums, music
                        videos, songs, and every remaining rating/dislike
+  probe-history        Show how much recent-played history the API exposes
 
 Options:
-  --execute          Actually delete (default is a dry run that only lists what was found)
-  --scan             favorites: skip the Favorite Songs playlist, scan the whole library
-  --playlist <name>  favorites: exact name of your favorites playlist
-  --help             Show this help
+  --execute              Actually delete (default is a dry run that only lists what was found)
+  --scan                 favorites: skip the Favorite Songs playlist, scan the whole library
+  --playlist <name>      favorites: exact name of your favorites playlist
+  --no-plays-within <d>  favorites: only remove favorites absent from recent-played history
+                         (approximates "0 plays in the last N days"; history depth is API-limited)
+  --help                 Show this help
 `
 
 interface Args {
-  command: 'favorites' | 'wipe'
+  command: 'favorites' | 'wipe' | 'probe-history'
   execute: boolean
   scan: boolean
   playlist?: string
+  noPlaysWithinDays?: number
 }
 
 function parseArgs(argv: string[]): Args {
@@ -49,6 +55,9 @@ function parseArgs(argv: string[]): Args {
       case 'wipe':
         args.command = 'wipe'
         break
+      case 'probe-history':
+        args.command = 'probe-history'
+        break
       case '--execute':
         args.execute = true
         break
@@ -57,7 +66,21 @@ function parseArgs(argv: string[]): Args {
         break
       case '--playlist':
         args.playlist = argv[++i]
+        if (!args.playlist) {
+          console.error('--playlist requires a value\n\n' + HELP)
+          process.exit(2)
+        }
         break
+      case '--no-plays-within': {
+        const raw = argv[++i]
+        const days = Number(raw?.replace(/d$/i, ''))
+        if (!raw || !Number.isFinite(days) || days <= 0) {
+          console.error('--no-plays-within requires a positive number of days\n\n' + HELP)
+          process.exit(2)
+        }
+        args.noPlaysWithinDays = days
+        break
+      }
       case '--help':
         console.log(HELP)
         process.exit(0)
@@ -77,31 +100,82 @@ function reportFailures(failures: Failure[]): void {
   process.exitCode = 1
 }
 
-async function runFavorites(client: AppleMusicClient, args: Args): Promise<void> {
-  let favorites: FavoriteTrack[]
+async function loadFavorites(client: AppleMusicClient, args: Args): Promise<FavoriteTrack[]> {
   if (!args.scan) {
     const playlistId = await findFavoritesPlaylistId(client, args.playlist)
-    favorites = playlistId ? await favoritesFromPlaylist(client, playlistId) : await favoritesFromScan(client)
-  } else {
-    favorites = await favoritesFromScan(client)
+    return playlistId ? await favoritesFromPlaylist(client, playlistId) : await favoritesFromScan(client)
   }
+  return favoritesFromScan(client)
+}
+
+async function runProbeHistory(client: AppleMusicClient): Promise<void> {
+  console.log('Fetching recent-played history from Apple Music API…')
+  const probe = await probeRecentHistory(client)
+  console.log(`  entries returned: ${probe.trackCount}`)
+  console.log(`  unique catalog ids: ${probe.uniqueCatalogIds}`)
+  if (probe.sample.length > 0) {
+    console.log('  most recent tracks:')
+    for (const t of probe.sample) console.log(`    ${t.name} — ${t.artist}`)
+  }
+  console.log(
+    '\nNote: Apple exposes a bounded recent-played feed, not a full play log. ' +
+      'Use --no-plays-within with this in mind.',
+  )
+}
+
+async function runFavorites(client: AppleMusicClient, args: Args): Promise<void> {
+  const favorites = await loadFavorites(client, args)
 
   if (favorites.length === 0) {
     console.log('No favorited tracks found. Nothing to do.')
     return
   }
-  for (const t of favorites) console.log(`  ${t.name} — ${t.artist}`)
-  console.log(`\n${favorites.length} favorited track(s) found.`)
 
-  if (!args.execute) {
-    console.log('Dry run: nothing was deleted. Re-run with --execute to remove them all.')
+  const rules: CleanRules = {}
+  if (args.noPlaysWithinDays !== undefined) rules.noPlaysWithinDays = args.noPlaysWithinDays
+
+  let targets = favorites
+  let skippedNoCatalogId = 0
+
+  if (rules.noPlaysWithinDays !== undefined) {
+    process.stderr.write('Loading recent-played history…')
+    const played = await fetchRecentPlayedCatalogIds(client, (n) => {
+      process.stderr.write(`\rLoading recent-played history… ${n} entries`)
+    })
+    process.stderr.write('\n')
+    const selection = selectFavoritesForRemoval(favorites, played, rules)
+    targets = selection.targets
+    skippedNoCatalogId = selection.skippedNoCatalogId
+  }
+
+  const ruleLabel = describeRule(rules)
+  if (ruleLabel) {
+    console.log(`Rule: ${ruleLabel}`)
+    console.log(`  ${favorites.length} favorite(s) total`)
+    console.log(`  ${targets.length} would be removed`)
+    if (skippedNoCatalogId > 0) {
+      console.log(`  ${skippedNoCatalogId} skipped (no catalog id — cannot match play history)`)
+    }
+  }
+
+  if (targets.length === 0) {
+    console.log('No tracks match the cleanup rule. Nothing to do.')
     return
   }
-  const failures = await removeFavorites(client, favorites, (done, total) => {
+
+  for (const t of targets) console.log(`  ${t.name} — ${t.artist}`)
+  console.log(`\n${targets.length} track(s) selected.`)
+
+  if (!args.execute) {
+    console.log('Dry run: nothing was deleted. Re-run with --execute to remove them.')
+    return
+  }
+
+  const failures = await removeFavorites(client, targets, (done, total) => {
     process.stderr.write(`\rRemoving favorites… ${done}/${total}`)
   })
   process.stderr.write('\n')
-  console.log(`Done: ${favorites.length - failures.length}/${favorites.length} favorites removed.`)
+  console.log(`Done: ${targets.length - failures.length}/${targets.length} favorites removed.`)
   reportFailures(failures.map((f) => ({ label: `${f.track.name} — ${f.track.artist}`, error: f.error })))
 }
 
@@ -128,7 +202,9 @@ async function runWipe(client: AppleMusicClient, args: Args): Promise<void> {
   }
 
   if (!args.execute) {
-    console.log(`\nDry run: nothing was deleted. Re-run with "wipe --execute" to delete all ${totalItems} item(s) and ${ratings.length} rating(s). This is irreversible.`)
+    console.log(
+      `\nDry run: nothing was deleted. Re-run with "wipe --execute" to delete all ${totalItems} item(s) and ${ratings.length} rating(s). This is irreversible.`,
+    )
     return
   }
 
@@ -153,7 +229,9 @@ async function runWipe(client: AppleMusicClient, args: Args): Promise<void> {
     process.stderr.write('\n')
   }
 
-  console.log(`Done: ${totalItems + ratings.length - failures.length}/${totalItems + ratings.length} deletions succeeded.`)
+  console.log(
+    `Done: ${totalItems + ratings.length - failures.length}/${totalItems + ratings.length} deletions succeeded.`,
+  )
   reportFailures(failures)
 }
 
@@ -161,6 +239,7 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2))
   const client = new AppleMusicClient(loadConfig())
   if (args.command === 'wipe') await runWipe(client, args)
+  else if (args.command === 'probe-history') await runProbeHistory(client)
   else await runFavorites(client, args)
 }
 
