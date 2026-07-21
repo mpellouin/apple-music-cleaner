@@ -4,6 +4,8 @@ export interface FavoriteTrack {
   libraryId?: string
   catalogId?: string
   purchasedId?: string
+  albumLibraryId?: string
+  dateAdded?: string
   name: string
   artist: string
 }
@@ -13,7 +15,11 @@ interface LibraryResource {
   attributes?: {
     name?: string
     artistName?: string
+    dateAdded?: string
     playParams?: { catalogId?: string; purchasedId?: string }
+  }
+  relationships?: {
+    albums?: { data?: { id: string }[] }
   }
 }
 
@@ -40,6 +46,8 @@ function toTrack(res: LibraryResource): FavoriteTrack {
     libraryId: res.id,
     catalogId: res.attributes?.playParams?.catalogId,
     purchasedId: res.attributes?.playParams?.purchasedId,
+    albumLibraryId: res.relationships?.albums?.data?.[0]?.id,
+    dateAdded: res.attributes?.dateAdded,
     name: res.attributes?.name ?? '(unknown title)',
     artist: res.attributes?.artistName ?? '(unknown artist)',
   }
@@ -97,7 +105,9 @@ async function scanRatedSongs(
   const matched: FavoriteTrack[] = []
   let batch: FavoriteTrack[] = []
   let scanned = 0
-  for await (const song of client.paginate<LibraryResource>('/v1/me/library/songs?limit=100')) {
+  for await (const song of client.paginate<LibraryResource>(
+    '/v1/me/library/songs?limit=100&include=albums',
+  )) {
     batch.push(toTrack(song))
     if (batch.length === 100) {
       matched.push(...(await filterRated(client, batch, wantValue)))
