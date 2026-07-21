@@ -47,12 +47,17 @@ function errMessage(e: unknown): string {
   return e instanceof Error ? e.message : String(e)
 }
 
-async function clientFrom(req: IncomingMessage): Promise<{ client: AppleMusicClient; mode?: string }> {
+async function clientFrom(req: IncomingMessage): Promise<{
+  client: AppleMusicClient
+  mode?: string
+  dryRun?: boolean
+}> {
   const body = await readJson(req)
   if (!body.devToken || !body.userToken) throw new Error('Both tokens are required.')
   return {
     client: new AppleMusicClient({ devToken: body.devToken, mediaUserToken: body.userToken }),
     mode: body.mode,
+    dryRun: String(body.dryRun) === 'true',
   }
 }
 
@@ -79,19 +84,23 @@ async function handleInventory(req: IncomingMessage, res: ServerResponse): Promi
 async function handleClean(req: IncomingMessage, res: ServerResponse): Promise<void> {
   const send = ndjson(res)
   try {
-    const { client, mode } = await clientFrom(req)
+    const { client, mode, dryRun } = await clientFrom(req)
     const progress = (label: string) => (done: number, total: number) =>
       send({ event: 'progress', label, done, total })
 
     if (mode === 'favorites') {
-      send({ event: 'phase', label: 'Scanning your library' })
+      send({ event: 'phase', label: dryRun ? 'Previewing favorites to remove' : 'Scanning your library' })
       const songsCat = CATEGORIES.find((c) => c.key === 'songs')!
       const songs = await listCategory(client, songsCat)
       const favIds = new Set(await ratedIds(client, 'library-songs', songs.map((s) => s.id), 1))
       const favorites = songs.filter((s) => favIds.has(s.id))
-      send({ event: 'found', count: favorites.length })
+      send({ event: 'found', count: favorites.length, tracks: favorites.map((f) => f.label) })
       if (favorites.length === 0) {
-        send({ event: 'done', deleted: 0, failed: 0, failures: [] })
+        send({ event: 'done', deleted: 0, failed: 0, failures: [], dryRun })
+        return void res.end()
+      }
+      if (dryRun) {
+        send({ event: 'done', deleted: 0, failed: 0, failures: [], dryRun: true, preview: favorites.map((f) => f.label) })
         return void res.end()
       }
       send({ event: 'phase', label: 'Removing favorites' })
@@ -102,9 +111,10 @@ async function handleClean(req: IncomingMessage, res: ServerResponse): Promise<v
         deleted: favorites.length - failures.length,
         failed: failures.length,
         failures: failures.map((f) => f.label),
+        dryRun: false,
       })
     } else if (mode === 'wipe') {
-      send({ event: 'phase', label: 'Inventorying your library' })
+      send({ event: 'phase', label: dryRun ? 'Previewing library wipe' : 'Inventorying your library' })
       const inventory: { cat: (typeof CATEGORIES)[number]; items: WipeItem[] }[] = []
       for (const cat of CATEGORIES) {
         const items = await listCategory(client, cat)
@@ -116,6 +126,21 @@ async function handleClean(req: IncomingMessage, res: ServerResponse): Promise<v
       for (const { cat, items } of inventory) ratings.push(...(await findRatings(client, cat, items)))
       const total = inventory.reduce((n, { items }) => n + items.length, 0) + ratings.length
       send({ event: 'found', count: total })
+
+      if (dryRun) {
+        send({
+          event: 'done',
+          deleted: 0,
+          failed: 0,
+          failures: [],
+          dryRun: true,
+          preview: {
+            items: total - ratings.length,
+            ratings: ratings.length,
+          },
+        })
+        return void res.end()
+      }
 
       const failures: Failure[] = []
       if (ratings.length > 0) {
@@ -132,6 +157,7 @@ async function handleClean(req: IncomingMessage, res: ServerResponse): Promise<v
         deleted: total - failures.length,
         failed: failures.length,
         failures: failures.map((f) => f.label),
+        dryRun: false,
       })
     } else {
       throw new Error(`Unknown mode: ${mode}`)

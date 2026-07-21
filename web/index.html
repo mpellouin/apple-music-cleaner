@@ -241,11 +241,13 @@
       <div class="action">
         <h3>💔 Un-favorite everything</h3>
         <p>Removes the favorite rating from every favorited song. Your library itself stays untouched.</p>
+        <button class="btn btn-ghost" id="favPreviewBtn">Preview removal</button>
         <button class="btn btn-danger" id="favBtn">Remove all favorites</button>
       </div>
       <div class="action">
         <h3>🧨 Wipe entire library</h3>
         <p>Deletes all playlists, albums, music videos, songs and every rating. Type <b>DELETE</b> to arm.</p>
+        <button class="btn btn-ghost" id="wipePreviewBtn">Preview wipe</button>
         <input class="arm" id="armInput" placeholder="DELETE" autocomplete="off" spellcheck="false">
         <button class="btn btn-danger" id="wipeBtn" disabled>Wipe everything</button>
       </div>
@@ -355,6 +357,7 @@
     if (error) throw new Error(error);
     $('favToggle').hidden = favTracks.length === 0;
     $('favBtn').disabled = favTracks.length === 0;
+    $('favPreviewBtn').disabled = favTracks.length === 0;
     $('favBtn').textContent = favTracks.length ? `Remove all ${favTracks.length} favorites` : 'No favorites found';
     $('favList').innerHTML = favTracks.map((t) => `<div>${t.replace(/</g, '&lt;')}</div>`).join('');
     $('favList').classList.remove('open');
@@ -391,10 +394,10 @@
   });
 
   // ---- run a clean ----
-  async function runClean(mode, title) {
+  async function runClean(mode, title, dryRun = false) {
     show('run');
     $('runTitle').textContent = title;
-    $('runPhase').textContent = 'Starting…';
+    $('runPhase').textContent = dryRun ? 'Building preview…' : 'Starting…';
     $('barFill').style.width = '0%';
     $('runCount').textContent = '';
     $('runPct').textContent = '';
@@ -405,7 +408,7 @@
       $('runLog').prepend(d);
     };
     let summary = null, error = null;
-    await stream('/api/clean', { ...tokens, mode }, (ev) => {
+    await stream('/api/clean', { ...tokens, mode, dryRun }, (ev) => {
       if (ev.event === 'phase') { $('runPhase').textContent = ev.label; log('▸ ' + ev.label); }
       if (ev.event === 'category') log(`  ${ev.key}: ${ev.count}`);
       if (ev.event === 'found') log(`  ${ev.count} item(s) to process`);
@@ -425,6 +428,25 @@
       $('resultNums').textContent = '';
       $('resultSub').textContent = error;
       $('resultFails').hidden = true;
+    } else if (summary.dryRun) {
+      $('resultIcon').className = 'result-icon good';
+      $('resultIcon').textContent = '👁';
+      $('resultTitle').textContent = 'Preview only — nothing deleted';
+      if (summary.preview && Array.isArray(summary.preview)) {
+        $('resultNums').textContent = summary.preview.length.toLocaleString() + ' favorites';
+        $('resultSub').textContent = 'These tracks would lose their favorite rating. Click “Remove all favorites” to proceed.';
+        $('resultFails').hidden = summary.preview.length === 0;
+        $('resultFails').innerHTML = summary.preview.slice(0, 50).map((f) => `<div>• ${String(f).replace(/</g, '&lt;')}</div>`).join('')
+          + (summary.preview.length > 50 ? `<div>… and ${summary.preview.length - 50} more</div>` : '');
+      } else if (summary.preview) {
+        $('resultNums').textContent = `${summary.preview.items.toLocaleString()} items + ${summary.preview.ratings.toLocaleString()} ratings`;
+        $('resultSub').textContent = 'Type DELETE and confirm to wipe for real.';
+        $('resultFails').hidden = true;
+      } else {
+        $('resultNums').textContent = '';
+        $('resultSub').textContent = 'Nothing would be changed.';
+        $('resultFails').hidden = true;
+      }
     } else {
       const clean = summary.failed === 0;
       $('resultIcon').className = 'result-icon ' + (clean ? 'good' : 'warn');
@@ -440,10 +462,16 @@
     show('result');
   }
 
+  $('favPreviewBtn').addEventListener('click', () => {
+    runClean('favorites', 'Previewing favorites', true);
+  });
   $('favBtn').addEventListener('click', () => {
     if (confirm(`Remove the favorite rating from ${favTracks.length} song(s)?\n\nThis cannot be undone.`)) {
       runClean('favorites', 'Removing favorites');
     }
+  });
+  $('wipePreviewBtn').addEventListener('click', () => {
+    runClean('wipe', 'Previewing wipe', true);
   });
   $('wipeBtn').addEventListener('click', () => {
     if (confirm('PERMANENTLY delete your entire Apple Music library?\n\nPlaylists, albums, music videos, songs, ratings — everything. This cannot be undone.')) {
