@@ -1,0 +1,36 @@
+# apple-music-cleaner
+
+> Bulk-remove Apple Music favorites or wipe your library using web-player session tokens. No paid Apple Developer account. CLI + local web UI.
+
+## Docs
+
+- [README](https://github.com/mpellouin/apple-music-cleaner/blob/main/README.md): Installation, token setup, CLI commands, web app, limitations
+- [AGENTS.md](https://github.com/mpellouin/apple-music-cleaner/blob/main/AGENTS.md): Guidance for coding agents working on this repo
+
+## Use cases
+
+- Remove all favorited tracks at once from the command line or web UI
+- Remove favorites with no recent plays (`--no-plays-within 90`)
+- Wipe entire Apple Music library (playlists, albums, songs, music videos, ratings)
+- Dry-run before any destructive operation (CLI default)
+
+## Commands
+
+- `npm start` — list favorites (dry run)
+- `npm start -- --execute` — remove all favorites
+- `npm start -- --no-plays-within 90 --execute` — remove stale favorites
+- `npm start -- probe-history` — inspect recent-played API depth
+- `npm start -- wipe --execute` — wipe entire library
+- `npm run web` — local web UI on port 3000
+
+## Limitations
+
+- Uses the same private API as music.apple.com (not officially documented)
+- Deletions are permanent
+- Recent-played history is bounded; `--no-plays-within` is approximate
+- Cannot delete the system Favorite Songs playlist
+- Play history and recommendation profile are not fully clearable via API
+
+## Optional
+
+- [LICENSE](https://github.com/mpellouin/apple-music-cleaner/blob/main/LICENSE): MIT
