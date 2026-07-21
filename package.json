@@ -1,16 +1,50 @@
 {
   "name": "apple-music-cleaner",
-  "version": "0.1.0",
-  "private": true,
+  "version": "0.2.0",
+  "description": "Bulk-remove Apple Music favorites or wipe your library — CLI & web UI, no paid dev account",
   "type": "module",
+  "bin": {
+    "apple-music-cleaner": "./bin/apple-music-cleaner.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "web",
+    "docs",
+    "llms.txt",
+    "AGENTS.md",
+    "LICENSE",
+    "README.md",
+    ".env.example"
+  ],
   "scripts": {
     "start": "tsx src/cli.ts",
     "web": "tsx src/server.ts",
     "typecheck": "tsc --noEmit"
   },
+  "keywords": [
+    "apple-music",
+    "library-cleaner",
+    "musickit",
+    "cli",
+    "favorites",
+    "music-library",
+    "bulk-delete"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mpellouin/apple-music-cleaner.git"
+  },
+  "homepage": "https://mpellouin.github.io/apple-music-cleaner/",
+  "dependencies": {
+    "tsx": "^4.19.0"
+  },
   "devDependencies": {
     "@types/node": "^24.0.0",
-    "tsx": "^4.19.0",
     "typescript": "^5.8.0"
   }
 }
