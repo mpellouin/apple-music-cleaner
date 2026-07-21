@@ -4,37 +4,41 @@
 
 ## Docs
 
-- [README](https://github.com/mpellouin/apple-music-cleaner/blob/main/README.md): Installation, token setup, CLI commands, web app, limitations
-- [AGENTS.md](https://github.com/mpellouin/apple-music-cleaner/blob/main/AGENTS.md): Guidance for coding agents working on this repo
+- [README](https://github.com/mpellouin/apple-music-cleaner/blob/main/README.md): Installation, tokens, full CLI reference, FAQ
+- [AGENTS.md](https://github.com/mpellouin/apple-music-cleaner/blob/main/AGENTS.md): Coding agent guide
+- [Site](https://mpellouin.github.io/apple-music-cleaner/): GitHub Pages landing
+- [Mac library DB](https://github.com/mpellouin/apple-music-cleaner/blob/main/docs/mac-library-db.md): Play counts via Music.app
+- [Recommendations reset](https://github.com/mpellouin/apple-music-cleaner/blob/main/docs/recommendations-reset.md): After wipe
+
+## Install
+
+```sh
+npm install -g apple-music-cleaner
+npx apple-music-cleaner presets
+```
 
 ## Use cases
 
-- Remove all favorited tracks at once (CLI or web UI)
-- Remove stale favorites with no recent plays (`--no-plays-within 90`)
-- Remove dislikes only (`dislikes` command)
-- Filter by artist, title pattern, keep-list, exclude purchased
-- Export cleanup targets to CSV before deleting
-- Wipe entire library or scoped categories (`--category songs,playlists`)
-- Dry-run preview in CLI (default) and web UI (Preview buttons)
+- Remove all or selective favorites (presets, filters, dry-run preview with reasons)
+- Remove dislikes, empty playlists, duplicate favorites, orphan album tracks
+- Wipe library (full or by category), exclude purchased items
+- Snapshot inventory before/after, resume failed deletions
+- Web UI with selective cleanup wizard
 
 ## Commands
 
-- `npm start` — list favorites (dry run)
-- `npm start -- --execute` — remove all favorites
-- `npm start -- --no-plays-within 90 --execute` — remove stale favorites
-- `npm start -- dislikes --execute` — remove all dislikes
-- `npm start -- wipe --category songs --execute` — delete songs only
-- `npm start -- wipe --dislikes-only --execute` — clear dislikes without deleting items
-- `npm start -- probe-history` — inspect recent-played API depth
-- `npm run web` — local web UI with preview mode on port 3000
+- `apple-music-cleaner --preset stale-favorites`
+- `apple-music-cleaner --added-before 365 --execute`
+- `apple-music-cleaner empty-playlists --execute`
+- `apple-music-cleaner snapshot save before.json`
+- `apple-music-cleaner resume failures.json`
+- `npm run web` — local UI on port 3000
 
 ## Limitations
 
-- Uses the same private API as music.apple.com (not officially documented)
-- Deletions are permanent
-- Recent-played history is bounded; `--no-plays-within` is approximate
-- Cannot delete the system Favorite Songs playlist
-- Full play history and recommendation profile are not clearable via API
+- Private web-player API (same as music.apple.com)
+- Recent-played feed is bounded (not full play log)
+- Cannot reset recommendations via API
 
 ## Optional
 

@@ -62,7 +62,16 @@ Then in your browser:
 
 1. **Connect** — paste the two tokens. The app validates them locally and shows the JWT's expiry date.
 2. **Review** — it loads your library and shows live counts: songs, albums, playlists, music videos, favorites (with an expandable track list).
-3. **Clean** — either **Remove all favorites**, or **Wipe entire library** (which only arms after you type `DELETE`, then asks for a final confirmation). A progress bar and log track every deletion, and a summary reports anything that failed.
+3. **Clean** — selective cleanup (presets + preview), remove all favorites, delete empty playlists, or wipe the entire library (type `DELETE` to arm). Preview buttons dry-run before destructive actions.
+
+## Install
+
+```sh
+npm install -g apple-music-cleaner   # or clone + npm install
+npx apple-music-cleaner presets      # list built-in presets
+```
+
+Requires Node.js 20+. Site: [mpellouin.github.io/apple-music-cleaner](https://mpellouin.github.io/apple-music-cleaner/) · AI index: [`llms.txt`](llms.txt)
 
 ## CLI usage
 
@@ -93,51 +102,84 @@ npm start -- wipe --dislikes-only --execute
 npm start -- --artist "Various Artists" --export stale.csv --execute
 ```
 
+# Use a preset (dry run)
+npm start -- --preset stale-favorites
+
+# Remove favorites added more than a year ago
+npm start -- --added-before 365 --execute
+
+# Duplicate favorites, orphan albums, outside heavy rotation
+npm start -- --duplicates-only --execute
+npm start -- --orphan-album --execute
+npm start -- --outside-heavy-rotation --execute
+
+# Delete empty playlists
+npm start -- empty-playlists --execute
+
+# Snapshot before/after cleanup
+npm start -- snapshot save before.json
+npm start -- snapshot compare before.json
+
+# Retry failed deletions
+npm start -- resume failures.json --execute
+
+# Cron-friendly (non-interactive)
+AMC_EXECUTE=1 npm start -- --preset spring-clean --execute --failure-log failures.json
+```
+
 ### Commands
 
 | Command | Effect |
 |---|---|
 | `favorites` (default) | Remove favorite ratings (optionally filtered) |
-| `dislikes` | Remove dislike ratings (same filter flags as favorites) |
+| `dislikes` | Remove dislike ratings |
 | `wipe` | Delete library items and/or clear ratings |
-| `probe-history` | Inspect recent-played API depth on your account |
+| `empty-playlists` | Delete playlists with zero tracks |
+| `probe-history` | Inspect recent-played API depth |
+| `probe-added` | Inspect recently-added API |
+| `probe-rotation` | Inspect heavy-rotation feed |
+| `presets` | List built-in cleanup presets |
+| `snapshot save\|compare <file>` | Save or compare inventory snapshots |
+| `resume <log.json>` | Retry deletions from a failure log |
 
 ### Options
 
 | Flag | Applies to | Effect |
 |---|---|---|
 | `--execute` | all | Actually delete (default is dry run) |
+| `--preset <name>` | favorites, dislikes | Built-in rule preset (`presets` command) |
 | `--scan` | favorites | Full library scan instead of Favorite Songs playlist |
-| `--playlist "<name>"` | favorites | Override favorites playlist name |
-| `--no-plays-within <days>` | favorites, dislikes | Only remove tracks absent from recent-played feed |
-| `--artist "<name>"` | favorites, dislikes | Artist substring match (case-insensitive) |
-| `--exclude-artist "<name>"` | favorites, dislikes | Skip matching artists |
-| `--title "<pattern>"` | favorites, dislikes | Title match (`/regex/i` or plain substring) |
-| `--keep-file <path>` | favorites, dislikes | Skip tracks listed (catalog id or `Artist — Title`) |
-| `--exclude-purchased` | favorites, dislikes, wipe | Skip purchased tracks/items |
-| `--export <path>` | favorites, dislikes | Write selected targets to CSV |
-| `--category <keys>` | wipe | Comma-separated: `playlists`, `albums`, `music videos`, `songs` |
-| `--dislikes-only` | wipe | Clear dislike ratings only, do not delete items |
+| `--no-plays-within <days>` | favorites, dislikes | Absent from recent-played feed |
+| `--never-played` | favorites, dislikes | Not in recent-played feed |
+| `--added-before <days>` | favorites, dislikes | `dateAdded` older than N days |
+| `--duplicates-only` | favorites | Duplicate catalog id / title entries |
+| `--orphan-album` | favorites | Album no longer in library |
+| `--outside-heavy-rotation` | favorites | Not in heavy-rotation feed |
+| `--artist`, `--exclude-artist`, `--title` | favorites, dislikes | Text filters |
+| `--keep-file`, `--exclude-purchased`, `--export` | favorites, dislikes | Safety & export |
+| `--failure-log`, `--verbose` | favorites, dislikes, wipe | Resume support & full preview |
+| `--category`, `--dislikes-only` | wipe | Scoped wipe |
 
 ```sh
-# Inspect how much play history the API exposes on your account
 npm start -- probe-history
+npm start -- probe-added
+npm start -- probe-rotation
+npm start -- presets
 ```
 
-**Note:** Apple does not expose per-track play counts or a full play log. `--no-plays-within` compares against the bounded `/v1/me/recent/played/tracks` feed — run `probe-history` first to see how deep that feed goes on your account.
+**Note:** Play counts are not exposed by API. `--no-plays-within` uses the bounded recent-played feed. For richer play data on Mac, see [docs/mac-library-db.md](docs/mac-library-db.md).
 
-### Web app previews
+### Web app
 
-The web UI (`npm run web`) includes **Preview removal** and **Preview wipe** buttons — dry-run equivalents before confirming destructive actions.
+Selective cleanup wizard with presets, preview-with-reasons, empty playlists, and token expiry notice.
 
-## Roadmap (not yet implemented)
+### Advanced docs (Tier D)
 
-These were identified as valuable but need more API exploration or larger UX work:
-
-- Never played since added / added-before date rules (`dateAdded`, recently-added endpoint)
-- Duplicate favorites, empty playlists, orphan album cleanup
-- Resume from failure log, saved rule presets, scheduled cron mode
-- npm global install / GitHub Pages with `/llms.txt`
+| Doc | Topic |
+|---|---|
+| [docs/mac-library-db.md](docs/mac-library-db.md) | Music.app SQLite on macOS |
+| [docs/applescript.md](docs/applescript.md) | Shortcuts, cron, AppleScript |
+| [docs/recommendations-reset.md](docs/recommendations-reset.md) | Reset taste profile after wipe |
 
 ## FAQ
 
